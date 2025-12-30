@@ -228,12 +228,14 @@ Enables BGP Graceful Restart (RFC 4724). Temporarily maintains sessions during B
 
 ```
 ipv4 {
-    receive limit 500 action restart;
+    receive limit 500 action warn;
     ...
 }
 ```
 
 Sets the maximum number of prefixes to receive from a neighbor. The `action` specifies behavior when the limit is exceeded.
+
+clos-tinet uses `action warn` to preserve the problematic state for investigation without disrupting the session.
 
 ### merge paths
 
@@ -342,4 +344,4 @@ Server
 - [RFC 6793 - BGP Support for Four-Octet Autonomous System (AS) Number Space](https://datatracker.ietf.org/doc/html/rfc6793)
 - [RFC 7938 - Use of BGP for Routing in Large-Scale Data Centers](https://datatracker.ietf.org/doc/html/rfc7938)
 - [RFC 8950 - Advertising IPv4 Network Layer Reachability Information (NLRI) with an IPv6 Next Hop](https://datatracker.ietf.org/doc/html/rfc8950)
-- [BIRD 2.0 User's Guide](https://bird.network.cz/?get_doc&v=20&f=bird.html)
+- [BIRD 2.16 User's Guide - BGP](https://bird.nic.cz/doc/bird-2.16.2.html#bgp)

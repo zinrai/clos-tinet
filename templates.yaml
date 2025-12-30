@@ -56,7 +56,7 @@ spine: |
           ipv4 {
                   import filter {{ .ImportFilter }};
                   export filter {{ .ExportFilter }};
-                  receive limit {{ .MaxPrefix }} action restart;
+                  receive limit {{ .MaxPrefix }} action warn;
                   extended next hop;
           };
   }
@@ -135,7 +135,7 @@ leaf: |
           ipv4 {
                   import filter {{ .ImportFilter }};
                   export filter {{ .ExportFilter }};
-                  receive limit {{ .MaxPrefix }} action restart;
+                  receive limit {{ .MaxPrefix }} action warn;
                   extended next hop;
           };
   }
@@ -210,7 +210,7 @@ bl: |
           ipv4 {
                   import filter {{ .ImportFilter }};
                   export filter {{ .ExportFilter }};
-                  receive limit {{ .MaxPrefix }} action restart;
+                  receive limit {{ .MaxPrefix }} action warn;
                   extended next hop;
           };
   }
@@ -287,7 +287,7 @@ tor: |
           ipv4 {
                   import filter {{ .ImportFilter }};
                   export filter {{ .ExportFilter }};
-                  receive limit {{ .MaxPrefix }} action restart;
+                  receive limit {{ .MaxPrefix }} action warn;
                   extended next hop;
           };
   }
@@ -349,7 +349,7 @@ server: |
           ipv4 {
                   import filter {{ .ImportFilter }};
                   export filter {{ .ExportFilter }};
-                  receive limit {{ .MaxPrefix }} action restart;
+                  receive limit {{ .MaxPrefix }} action warn;
                   extended next hop;
           };
   }
@@ -410,7 +410,7 @@ router: |
           ipv4 {
                   import filter {{ .ImportFilter }};
                   export filter {{ .ExportFilter }};
-                  receive limit {{ .MaxPrefix }} action restart;
+                  receive limit {{ .MaxPrefix }} action warn;
                   extended next hop;
           };
   }
