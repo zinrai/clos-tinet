@@ -1,0 +1,422 @@
+spine: |
+  router id {{ .RouterID }};
+  define LOCAL_AS = {{ .ASN }};
+
+  protocol device {
+  }
+
+  protocol direct {
+          ipv4;
+          interface "lo";
+  }
+
+  protocol kernel {
+          learn;
+          merge paths;
+          ipv4 {
+                  import none;
+                  export all;
+          };
+  }
+
+  protocol bfd {
+          interface "*" {
+                  min rx interval 100 ms;
+                  min tx interval 100 ms;
+                  idle tx interval 1000 ms;
+                  multiplier 3;
+          };
+  }
+
+  filter spine_import {
+          if net ~ [ 10.255.0.0/16{24,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  filter spine_export {
+          if net ~ [ 10.255.0.0/16{24,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  {{ range .Neighbors }}
+  protocol bgp {{ .Name }} {
+          neighbor {{ .PeerLLA }} as {{ .PeerASN }};
+          local {{ .LocalLLA }} as LOCAL_AS;
+          direct;
+
+          bfd on;
+          graceful restart on;
+
+          ipv4 {
+                  import filter {{ .ImportFilter }};
+                  export filter {{ .ExportFilter }};
+                  receive limit {{ .MaxPrefix }} action restart;
+                  extended next hop;
+          };
+  }
+  {{ end }}
+
+leaf: |
+  router id {{ .RouterID }};
+  define LOCAL_AS = {{ .ASN }};
+
+  protocol device {
+  }
+
+  protocol direct {
+          ipv4;
+          interface "lo";
+  }
+
+  protocol kernel {
+          learn;
+          merge paths;
+          ipv4 {
+                  import none;
+                  export all;
+          };
+  }
+
+  protocol bfd {
+          interface "*" {
+                  min rx interval 100 ms;
+                  min tx interval 100 ms;
+                  idle tx interval 1000 ms;
+                  multiplier 3;
+          };
+  }
+
+  filter leaf_import_from_spine {
+          if net ~ [ 10.255.0.0/16{24,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  filter leaf_import_from_tor {
+          if net ~ [ 10.255.2.0/23{24,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          reject;
+  }
+
+  filter leaf_export_to_spine {
+          if net ~ [ 10.255.1.0/24{32,32} ] then accept;
+          if net ~ [ 10.255.2.0/23{24,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          reject;
+  }
+
+  filter leaf_export_to_tor {
+          if net ~ [ 10.255.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  {{ range .Neighbors }}
+  protocol bgp {{ .Name }} {
+          neighbor {{ .PeerLLA }} as {{ .PeerASN }};
+          local {{ .LocalLLA }} as LOCAL_AS;
+          direct;
+
+          bfd on;
+          graceful restart on;
+
+          ipv4 {
+                  import filter {{ .ImportFilter }};
+                  export filter {{ .ExportFilter }};
+                  receive limit {{ .MaxPrefix }} action restart;
+                  extended next hop;
+          };
+  }
+  {{ end }}
+
+bl: |
+  router id {{ .RouterID }};
+  define LOCAL_AS = {{ .ASN }};
+
+  protocol device {
+  }
+
+  protocol direct {
+          ipv4;
+          interface "lo";
+  }
+
+  protocol kernel {
+          learn;
+          merge paths;
+          ipv4 {
+                  import none;
+                  export all;
+          };
+  }
+
+  protocol bfd {
+          interface "*" {
+                  min rx interval 100 ms;
+                  min tx interval 100 ms;
+                  idle tx interval 1000 ms;
+                  multiplier 3;
+          };
+  }
+
+  filter bl_import_from_spine {
+          if net ~ [ 10.255.0.0/16{24,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          reject;
+  }
+
+  filter bl_import_from_router {
+          if net ~ [ 10.255.255.0/24{32,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  filter bl_export_to_spine {
+          if net ~ [ 10.255.254.0/24{32,32} ] then accept;
+          if net ~ [ 10.255.255.0/24{32,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  filter bl_export_to_router {
+          if net ~ [ 10.255.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          reject;
+  }
+
+  {{ range .Neighbors }}
+  protocol bgp {{ .Name }} {
+          neighbor {{ .PeerLLA }} as {{ .PeerASN }};
+          local {{ .LocalLLA }} as LOCAL_AS;
+          direct;
+
+          bfd on;
+          graceful restart on;
+
+          ipv4 {
+                  import filter {{ .ImportFilter }};
+                  export filter {{ .ExportFilter }};
+                  receive limit {{ .MaxPrefix }} action restart;
+                  extended next hop;
+          };
+  }
+  {{ end }}
+
+tor: |
+  router id {{ .RouterID }};
+  define LOCAL_AS = {{ .ASN }};
+
+  protocol device {
+  }
+
+  protocol direct {
+          ipv4;
+          interface "lo";
+  }
+
+  protocol kernel {
+          learn;
+          merge paths;
+          ipv4 {
+                  import none;
+                  export all;
+          };
+  }
+
+  protocol bfd {
+          interface "*" {
+                  min rx interval 100 ms;
+                  min tx interval 100 ms;
+                  idle tx interval 1000 ms;
+                  multiplier 3;
+          };
+  }
+
+  filter tor_import_from_leaf {
+          if net ~ [ 10.255.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  filter tor_import_from_server {
+          if net ~ [ 10.0.0.0/16{32,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{32,32} ] then accept;
+          reject;
+  }
+
+  filter tor_export_to_leaf {
+          if net ~ [ 10.255.2.0/23{32,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{32,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{32,32} ] then accept;
+          reject;
+  }
+
+  filter tor_export_to_server {
+          if net ~ [ 10.255.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  {{ range .Neighbors }}
+  protocol bgp {{ .Name }} {
+          neighbor {{ .PeerLLA }} as {{ .PeerASN }};
+          local {{ .LocalLLA }} as LOCAL_AS;
+          direct;
+
+          bfd on;
+          graceful restart on;
+
+          ipv4 {
+                  import filter {{ .ImportFilter }};
+                  export filter {{ .ExportFilter }};
+                  receive limit {{ .MaxPrefix }} action restart;
+                  extended next hop;
+          };
+  }
+  {{ end }}
+
+server: |
+  router id {{ .RouterID }};
+  define LOCAL_AS = {{ .ASN }};
+
+  protocol device {
+  }
+
+  protocol direct {
+          ipv4;
+          interface "lo";
+  }
+
+  protocol kernel {
+          learn;
+          merge paths;
+          ipv4 {
+                  import none;
+                  export all;
+          };
+  }
+
+  protocol bfd {
+          interface "*" {
+                  min rx interval 100 ms;
+                  min tx interval 100 ms;
+                  idle tx interval 1000 ms;
+                  multiplier 3;
+          };
+  }
+
+  filter server_import {
+          if net ~ [ 10.255.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  filter server_export {
+          if net ~ [ 10.0.0.0/16{32,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{32,32} ] then accept;
+          reject;
+  }
+
+  {{ range .Neighbors }}
+  protocol bgp {{ .Name }} {
+          neighbor {{ .PeerLLA }} as {{ .PeerASN }};
+          local {{ .LocalLLA }} as LOCAL_AS;
+          direct;
+
+          bfd on;
+          graceful restart on;
+
+          ipv4 {
+                  import filter {{ .ImportFilter }};
+                  export filter {{ .ExportFilter }};
+                  receive limit {{ .MaxPrefix }} action restart;
+                  extended next hop;
+          };
+  }
+  {{ end }}
+
+router: |
+  router id {{ .RouterID }};
+  define LOCAL_AS = {{ .ASN }};
+
+  protocol device {
+  }
+
+  protocol direct {
+          ipv4;
+          interface "lo";
+  }
+
+  protocol kernel {
+          learn;
+          merge paths;
+          ipv4 {
+                  import none;
+                  export all;
+          };
+  }
+
+  protocol bfd {
+          interface "*" {
+                  min rx interval 100 ms;
+                  min tx interval 100 ms;
+                  idle tx interval 1000 ms;
+                  multiplier 3;
+          };
+  }
+
+  filter router_import {
+          if net ~ [ 10.255.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.0.0.0/16{16,32} ] then accept;
+          if net ~ [ 10.100.0.0/24{24,32} ] then accept;
+          reject;
+  }
+
+  filter router_export {
+          if net ~ [ 10.255.255.0/24{32,32} ] then accept;
+          if net = 0.0.0.0/0 then accept;
+          reject;
+  }
+
+  {{ range .Neighbors }}
+  protocol bgp {{ .Name }} {
+          neighbor {{ .PeerLLA }} as {{ .PeerASN }};
+          local {{ .LocalLLA }} as LOCAL_AS;
+          direct;
+
+          bfd on;
+          graceful restart on;
+
+          ipv4 {
+                  import filter {{ .ImportFilter }};
+                  export filter {{ .ExportFilter }};
+                  receive limit {{ .MaxPrefix }} action restart;
+                  extended next hop;
+          };
+  }
+  {{ end }}
+
+  protocol static {
+          ipv4;
+          route 0.0.0.0/0 blackhole;
+  }
