@@ -11,6 +11,7 @@ This document describes the design philosophy and implementation details of clos
 5. [MAC Address and LLA Generation](#mac-address-and-lla-generation)
 6. [BIRD Configuration Parameters](#bird-configuration-parameters)
 7. [Filter Design](#filter-design)
+8. [External Network Connectivity](#external-network-connectivity)
 
 ## Topology Design
 
@@ -335,6 +336,47 @@ ToR
    v
 Server
 ```
+
+## External Network Connectivity
+
+### Overview
+
+The `-external-network` option enables internet connectivity from nodes within the Clos network. This feature is designed for learning environments to verify end-to-end connectivity.
+
+### Architecture
+
+```
+Server -> ToR -> Leaf -> Spine -> Border Leaf -> Router -> ext (OVS) -> Host -> Internet
+                                                   |
+                                              MASQUERADE
+```
+
+### Network Design
+
+| Item                    | Value              |
+|-------------------------|--------------------|
+| Subnet                  | 172.31.255.0/24    |
+| Gateway (host side)     | 172.31.255.1       |
+| router0                 | 172.31.255.2       |
+| router1                 | 172.31.255.3       |
+| router N                | 172.31.255.(N+2)   |
+
+### How It Works
+
+1. All routers connect to the OVS bridge `ext` via `eth0`
+2. Each router executes `iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE`
+3. Internal Clos addresses (10.0.0.0/8, etc.) are NAT-translated to the router's external address (172.31.255.X)
+4. The host performs MASQUERADE for 172.31.255.0/24 to the external interface
+
+### Relationship with BIRD Configuration
+
+The `route 0.0.0.0/0 blackhole` in the router's BIRD configuration is for BGP advertisement only and is not used for actual packet forwarding. Actual forwarding uses the default route via `eth0` (`ip route add default via 172.31.255.1`).
+
+### Limitations
+
+- Open vSwitch installation is required
+- Host-side configuration is required (IP address, iptables rules, IP forwarding)
+- Internet connectivity is implemented with NAT, which differs from production environments
 
 ## References
 

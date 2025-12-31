@@ -1,13 +1,25 @@
 package main
 
+import "fmt"
+
 const (
 	// ContainerImage is the Docker image used for all nodes.
 	ContainerImage = "ghcr.io/zinrai/docker-debian-bird2:debian-trixie"
+
+	// ExternalBridgeName is the OVS bridge name for external connectivity.
+	ExternalBridgeName = "ext"
+
+	// ExternalNetworkGateway is the gateway IP on the host side.
+	ExternalNetworkGateway = "172.31.255.1"
+
+	// ExternalNetworkPrefix is the subnet prefix for external network.
+	ExternalNetworkPrefix = "172.31.255"
 )
 
 // Spec represents the tinet specification.
 type Spec struct {
 	Nodes       []Node       `yaml:"nodes"`
+	Switches    []Switch     `yaml:"switches,omitempty"`
 	NodeConfigs []NodeConfig `yaml:"node_configs"`
 }
 
@@ -23,6 +35,12 @@ type Interface struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
 	Args string `yaml:"args"`
+}
+
+// Switch represents an OVS switch.
+type Switch struct {
+	Name       string      `yaml:"name"`
+	Interfaces []Interface `yaml:"interfaces"`
 }
 
 // NodeConfig represents the configuration commands for a node.
@@ -46,4 +64,10 @@ type Neighbor struct {
 	ImportFilter string
 	ExportFilter string
 	MaxPrefix    int
+}
+
+// ExternalRouterIP returns the external network IP for a router by index.
+// router0 -> 172.31.255.2, router1 -> 172.31.255.3, etc.
+func ExternalRouterIP(index int) string {
+	return fmt.Sprintf("%s.%d", ExternalNetworkPrefix, index+2)
 }

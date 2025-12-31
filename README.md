@@ -13,11 +13,13 @@ Build an L3 fabric with BGP Unnumbered using BIRD2.
 - Per-layer prefix filters
 - Anycast address (10.100.0.1/32)
 - Customizable BIRD templates
+- External network connectivity (optional)
 
 ## Prerequisites
 
 - [tinet](https://github.com/tinynetwork/tinet)
 - Docker
+- Open vSwitch (when using `-external-network`)
 
 ## Installation
 
@@ -58,6 +60,32 @@ $ tinet conf -c spec.yaml | sudo sh -x
     -servers-per-tor 48 > spec.yaml
 ```
 
+### External network connectivity
+
+Enable internet access from nodes within the Clos network:
+
+```bash
+# Generate spec.yaml (host setup commands are output to stderr)
+$ ./clos-tinet -external-network -external-interface ens3 > spec.yaml
+
+# Copy BIRD configurations to tinet volume
+$ cp ./output/*.conf /tmp/tinet/
+
+# Start topology
+$ tinet up -c spec.yaml | grep -v '<->' | sudo sh -x
+$ tinet conf -c spec.yaml | sudo sh -x
+
+# Run host setup commands (output from stderr)
+$ sudo ip addr add 172.31.255.1/24 dev ext
+$ sudo iptables -t nat -A POSTROUTING -s 172.31.255.0/24 -o ens3 -j MASQUERADE
+$ sudo iptables -I FORWARD -s 172.31.255.0/24 -o ens3 -j ACCEPT
+$ sudo iptables -I FORWARD -d 172.31.255.0/24 -i ens3 -m state --state RELATED,ESTABLISHED -j ACCEPT
+$ sudo sysctl -w net.ipv4.ip_forward=1
+
+# Test internet connectivity
+$ sudo docker exec server0-as4200100000 ping -c 3 8.8.8.8
+```
+
 ### Stop topology
 
 ```bash
@@ -66,16 +94,18 @@ $ tinet down -c spec.yaml | sudo sh -x
 
 ## Options
 
-| Option             | Default          | Description                                   |
-|--------------------|------------------|-----------------------------------------------|
-| `-spines`          | 2                | Number of spine switches                      |
-| `-leaf-pairs`      | 1                | Number of leaf switch pairs                   |
-| `-tors-per-pair`   | 2                | Number of ToR switches per leaf pair          |
-| `-servers-per-tor` | 2                | Number of servers per ToR                     |
-| `-border-leaves`   | 1                | Number of border leaf switches                |
-| `-routers`         | 1                | Number of external routers                    |
-| `-bird-config-dir` | `./output`       | Output directory for BIRD configuration files |
-| `-bird-templates`  | `templates.yaml` | Path to BIRD templates file                   |
+| Option                | Default          | Description                                                             |
+|-----------------------|------------------|-------------------------------------------------------------------------|
+| `-spines`             | 2                | Number of spine switches                                                |
+| `-leaf-pairs`         | 1                | Number of leaf switch pairs                                             |
+| `-tors-per-pair`      | 2                | Number of ToR switches per leaf pair                                    |
+| `-servers-per-tor`    | 2                | Number of servers per ToR                                               |
+| `-border-leaves`      | 1                | Number of border leaf switches                                          |
+| `-routers`            | 1                | Number of external routers                                              |
+| `-bird-config-dir`    | `./output`       | Output directory for BIRD configuration files                           |
+| `-bird-templates`     | `templates.yaml` | Path to BIRD templates file                                             |
+| `-external-network`   | false            | Enable external network connectivity via OVS bridge                     |
+| `-external-interface` | (none)           | Host interface for external network (required with `-external-network`) |
 
 ## Verification
 

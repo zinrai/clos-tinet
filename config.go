@@ -13,8 +13,10 @@ type Config struct {
 	NumBorderLeafs     int
 	NumRouters         int
 
-	BirdConfigDir string
-	BirdTemplates string
+	BirdConfigDir     string
+	BirdTemplates     string
+	ExternalNetwork   bool
+	ExternalInterface string
 }
 
 // DefaultConfig returns the default configuration (small for testing).
@@ -28,6 +30,8 @@ func DefaultConfig() Config {
 		NumRouters:         1,
 		BirdConfigDir:      "./output",
 		BirdTemplates:      "templates.yaml",
+		ExternalNetwork:    false,
+		ExternalInterface:  "",
 	}
 }
 
@@ -43,6 +47,8 @@ func ParseFlags() Config {
 	flag.IntVar(&cfg.NumRouters, "routers", cfg.NumRouters, "Number of external routers")
 	flag.StringVar(&cfg.BirdConfigDir, "bird-config-dir", cfg.BirdConfigDir, "Directory to output BIRD configuration files")
 	flag.StringVar(&cfg.BirdTemplates, "bird-templates", cfg.BirdTemplates, "Path to BIRD templates YAML file")
+	flag.BoolVar(&cfg.ExternalNetwork, "external-network", cfg.ExternalNetwork, "Enable external network connectivity via OVS bridge")
+	flag.StringVar(&cfg.ExternalInterface, "external-interface", cfg.ExternalInterface, "Host interface for external network (required with -external-network)")
 
 	flag.Parse()
 

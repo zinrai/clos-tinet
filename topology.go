@@ -56,10 +56,22 @@ func (t *Topology) Build() (Spec, error) {
 		return Spec{}, err
 	}
 
-	return Spec{
+	spec := Spec{
 		Nodes:       t.buildNodes(),
 		NodeConfigs: t.nodeConfigs,
-	}, nil
+	}
+
+	// Add switches if external network is enabled
+	if t.config.ExternalNetwork {
+		spec.Switches = []Switch{
+			{
+				Name:       ExternalBridgeName,
+				Interfaces: []Interface{},
+			},
+		}
+	}
+
+	return spec, nil
 }
 
 // GetBirdConfigs returns the generated BIRD configuration files.
@@ -73,6 +85,15 @@ func (t *Topology) addInterface(nodeName, ifName, targetNode, targetIf string) {
 		Name: ifName,
 		Type: "direct",
 		Args: fmt.Sprintf("%s#%s", targetNode, targetIf),
+	})
+}
+
+// addBridgeInterface adds a bridge interface definition to a node.
+func (t *Topology) addBridgeInterface(nodeName, ifName, bridgeName string) {
+	t.interfaces[nodeName] = append(t.interfaces[nodeName], Interface{
+		Name: ifName,
+		Type: "bridge",
+		Args: bridgeName,
 	})
 }
 
@@ -157,8 +178,7 @@ func (t *Topology) buildSpines() error {
 			leafASN := LeafASN(pairIdx)
 			for leafNum := 1; leafNum <= 2; leafNum++ {
 				leafName := fmt.Sprintf("leaf%d-as%d", leafNum, leafASN)
-				ifIdx := pairIdx*2 + leafNum - 1
-				myIf := fmt.Sprintf("lf%d", ifIdx)
+				myIf := fmt.Sprintf("lf%d", pairIdx*2+(leafNum-1))
 				peerIf := fmt.Sprintf("sp%d", i)
 
 				t.addLink(name, myIf, ASNSpine, leafName, peerIf, leafASN)
@@ -167,24 +187,24 @@ func (t *Topology) buildSpines() error {
 
 		// Connect to Border Leafs
 		for blIdx := 0; blIdx < t.config.NumBorderLeafs; blIdx++ {
-			blName := fmt.Sprintf("bl%d", blIdx)
 			myIf := fmt.Sprintf("bl%d", blIdx)
 			peerIf := fmt.Sprintf("sp%d", i)
 
-			t.addLink(name, myIf, ASNSpine, blName, peerIf, ASNBorderLeaf)
+			t.addLink(name, myIf, ASNSpine, fmt.Sprintf("bl%d", blIdx), peerIf, ASNBorderLeaf)
 		}
 
-		// Build neighbors from stored peer info
+		// Build neighbors
 		var neighbors []Neighbor
+
+		// Leaf neighbors
 		for pairIdx := 0; pairIdx < t.config.NumLeafPairs; pairIdx++ {
 			leafASN := LeafASN(pairIdx)
 			for leafNum := 1; leafNum <= 2; leafNum++ {
-				ifIdx := pairIdx*2 + leafNum - 1
-				myIf := fmt.Sprintf("lf%d", ifIdx)
+				myIf := fmt.Sprintf("lf%d", pairIdx*2+(leafNum-1))
 				peerLLA, peerASN, localLLA := t.getPeerInfo(name, myIf)
 
 				neighbors = append(neighbors, Neighbor{
-					Name:         fmt.Sprintf("leaf%d_%d", leafNum, leafASN),
+					Name:         fmt.Sprintf("leaf%d_as%d", leafNum, leafASN),
 					Interface:    myIf,
 					PeerASN:      peerASN,
 					PeerLLA:      peerLLA,
@@ -196,6 +216,7 @@ func (t *Topology) buildSpines() error {
 			}
 		}
 
+		// Border Leaf neighbors
 		for blIdx := 0; blIdx < t.config.NumBorderLeafs; blIdx++ {
 			myIf := fmt.Sprintf("bl%d", blIdx)
 			peerLLA, peerASN, localLLA := t.getPeerInfo(name, myIf)
@@ -208,7 +229,7 @@ func (t *Topology) buildSpines() error {
 				LocalLLA:     localLLA,
 				ImportFilter: "spine_import",
 				ExportFilter: "spine_export",
-				MaxPrefix:    1000,
+				MaxPrefix:    100,
 			})
 		}
 
@@ -466,10 +487,62 @@ func (t *Topology) buildRouters() error {
 			})
 		}
 
-		if err := t.addNodeConfig(name, routerID, "router", ASNRouter, neighbors, false); err != nil {
+		// Add external network interface if enabled
+		if t.config.ExternalNetwork {
+			t.addBridgeInterface(name, "eth0", ExternalBridgeName)
+		}
+
+		if err := t.addRouterNodeConfig(name, routerID, ASNRouter, neighbors, rtIdx); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// addRouterNodeConfig adds a router node configuration with optional external network settings.
+func (t *Topology) addRouterNodeConfig(name, routerID string, asn int, neighbors []Neighbor, routerIndex int) error {
+	// Generate BIRD config using template
+	data := TemplateData{
+		RouterID:  routerID,
+		ASN:       asn,
+		Neighbors: neighbors,
+	}
+
+	birdConf, err := t.templates.Render("router", data)
+	if err != nil {
+		return fmt.Errorf("failed to render template for %s: %w", name, err)
+	}
+
+	t.birdConfigs[name] = birdConf
+
+	cmds := []Command{
+		{Cmd: fmt.Sprintf("ip addr add %s/32 dev lo", routerID)},
+	}
+
+	// Add MAC setting commands
+	for _, macCmd := range t.macCmds[name] {
+		cmds = append(cmds, Command{Cmd: macCmd})
+	}
+
+	cmds = append(cmds,
+		Command{Cmd: "sysctl -w net.ipv4.ip_forward=1"},
+		Command{Cmd: "sysctl -w net.ipv6.conf.all.forwarding=1"},
+		Command{Cmd: fmt.Sprintf("cp /tinet/%s.conf /etc/bird/bird.conf", name)},
+		Command{Cmd: "mkdir -p /run/bird"},
+		Command{Cmd: "bird -c /etc/bird/bird.conf"},
+	)
+
+	// Add external network configuration if enabled
+	if t.config.ExternalNetwork {
+		externalIP := ExternalRouterIP(routerIndex)
+		cmds = append(cmds,
+			Command{Cmd: fmt.Sprintf("ip addr add %s/24 dev eth0", externalIP)},
+			Command{Cmd: fmt.Sprintf("ip route add default via %s", ExternalNetworkGateway)},
+			Command{Cmd: "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"},
+		)
+	}
+
+	t.nodeConfigs = append(t.nodeConfigs, NodeConfig{Name: name, Cmds: cmds})
 	return nil
 }
 
